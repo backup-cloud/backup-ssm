@@ -1,0 +1,30 @@
+exclude: '^$'
+fail_fast: false
+repos:
+-   repo: https://github.com/ambv/black
+    rev: stable
+    hooks:
+    - id: black
+      language_version: python3.7
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v1.2.3
+    hooks:
+    - id: check-added-large-files
+    - id: check-json
+    - id: detect-private-key
+    - id: end-of-file-fixer
+    - id: flake8
+      exclude: '^features/.*_steps/*'
+      args:
+        - --ignore=W503,E402,E501
+        - --max-line-length=131
+    - id: forbid-new-submodules
+    - id: check-yaml
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: 'master'  # Use the sha / tag you want to point at
+  hooks:
+  - id: mypy
+# -   repo: https://github.com/Lucas-C/pre-commit-hooks-go
+#     sha: v1.0.0
+#     hooks:
+#     -   id: checkmake
