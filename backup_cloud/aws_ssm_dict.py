@@ -16,8 +16,8 @@ class aws_ssm_dict(MutableMapping):
 
     """
 
-    def __init__(self, decrypt=True, return_type="value"):
-        self.ssm = boto3.client("ssm")
+    def __init__(self, decrypt=True, return_type="value", region_name="eu-west-1"):
+        self.ssm = boto3.client("ssm", region_name=region_name)
         self.decrypt = decrypt
         self.return_type = return_type
 
@@ -50,8 +50,50 @@ class aws_ssm_dict(MutableMapping):
         request_params = dict(Name=key)
         self.ssm.delete_parameter(**request_params)
 
+    def get_tuple_for_param(self, name):
+        try:
+            get_response = self.ssm.get_parameter(
+                Name=name, WithDecryption=self.decrypt
+            )
+        except self.ssm.exceptions.ParameterNotFound as e:
+            raise KeyError(e)
+        try:
+            describe_response = self.ssm.describe_parameter(Name=name)
+        except self.ssm.exceptions.ParameterNotFound as e:
+            raise KeyError(e)
+        return (
+            get_response["Parameter"]["Type"],
+            get_response["Parameter"]["Value"],
+            describe_response["Parameter"]["Description"],
+        )
+
+    def iterate_parameter_list(self):
+        paginator = self.ssm.get_paginator("get_parameters_by_path")
+        page_iterator = paginator.paginate(
+            Path="/", Recursive=True, WithDecryption=True
+        )
+        for page in page_iterator:
+            for i in page["Parameters"]:
+                yield i
+
+    def iterate_parameter_descriptions(self):
+        paginator = self.ssm.get_paginator("describe_parameters")
+        page_iterator = paginator.paginate()
+        for page in page_iterator:
+            for i in page["Parameters"]:
+                yield i["Name"]
+
+    def iterate_for_tuples(self):
+        for i in self.iterate_parameter_descriptions():
+            name = i["Name"]
+            yield (name, self.get_tuple_for_param(name))
+
+    def iterate_for_values(self):
+        for i in self.iterate_parameter_list():
+            yield (i["Name"], i["Value"])
+
     def __iter__(self):
-        pass
+        yield from self.iterate_parameter_descriptions()
 
     def __len__(self):
         pass
