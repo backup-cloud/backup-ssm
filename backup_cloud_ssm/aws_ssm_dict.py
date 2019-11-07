@@ -18,6 +18,7 @@ class aws_ssm_dict(MutableMapping):
 
     def __init__(self, decrypt=True, return_type="value", region_name="eu-west-1"):
         self.ssm = boto3.client("ssm", region_name=region_name)
+        self.exceptions = self.ssm.exceptions
         self.decrypt = decrypt
         self.return_type = return_type
 

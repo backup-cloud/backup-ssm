@@ -1,11 +1,31 @@
 Feature: backup SSM parameter store
 In order to ensure that I can recover my SSM parameters even
 
-   @wip
+   @fixture.preexist_params
    @fixture.ssm_params
    Scenario: backup SSM to a plaintext file
-   Given that I have some parameters in SSM parameter store
+   Given I have some parameters in SSM parameter store
    And that I have backed up those parmameters
    When I delete those parameters from SSM parameter store
-   And I run my restore script
+   And I restore those parameters
    Then those parameters should be in SSM parameter store
+
+
+   @wip
+   @fixture.preexist_params
+   @fixture.ssm_params
+   Scenario: provide backup from command line
+   Given I have some parameters in SSM parameter store
+   And I run the aws-ssm-backup command
+   When I delete those parameters from SSM parameter store
+   And I run the aws-ssm-backup command with the restore argument
+   Then those parameters should be in SSM parameter store
+
+
+   @future
+   Scenario: only warn for preexisting parameters if there is a mismatch
+   Given I have an existing parameter with the same value as in my backup
+   And I have an existing parameter with the a differnt value from my backup
+   When I run my restore without overwriting parameters
+   Then I should get a debug message about the matching parameter
+   And I should get a warning message about the other parameter
