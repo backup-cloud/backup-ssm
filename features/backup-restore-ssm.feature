@@ -10,8 +10,17 @@ In order to ensure that I can recover my SSM parameters even
    And I restore those parameters
    Then those parameters should be in SSM parameter store
 
-
    @wip
+   @fixture.preexist_params
+   @fixture.ssm_typed_params
+   Scenario: backup SSM to a plaintext file
+   Given I have some parameters in SSM parameter store
+   And that I have backed up those parmameters
+   When I delete those parameters from SSM parameter store
+   And I restore those parameters
+   Then those parameters should be in SSM parameter store
+   And the types of those parameters should be preserved
+
    @fixture.preexist_params
    @fixture.ssm_params
    Scenario: provide backup from command line

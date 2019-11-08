@@ -5,23 +5,43 @@ from behave.fixture import use_fixture_by_tag
 from backup_cloud_ssm.aws_ssm_dict import aws_ssm_dict
 
 
+def randomword(length=16):
+    return "".join(
+        [random.choice(string.ascii_letters + string.digits) for n in range(16)]
+    )
+
+
+def randomlist():
+    return ",".join([randomword(4), randomword(4), randomword(4), randomword(4)])
+
+
 def create_random_params(ssm_dict):
     params = {
-        "".join(
-            [random.choice(string.ascii_letters + string.digits) for n in range(16)]
-        ): "".join(
-            [random.choice(string.ascii_letters + string.digits) for n in range(16)]
-        ),
-        "".join(
-            [random.choice(string.ascii_letters + string.digits) for n in range(16)]
-        ): "".join(
-            [random.choice(string.ascii_letters + string.digits) for n in range(16)]
-        ),
-        "".join(
-            [random.choice(string.ascii_letters + string.digits) for n in range(16)]
-        ): "".join(
-            [random.choice(string.ascii_letters + string.digits) for n in range(16)]
-        ),
+        randomword(): randomword(),
+        randomword(): randomword(),
+        randomword(): randomword(),
+    }
+    ssm_dict.upload_dictionary(params)
+    return params
+
+
+def create_random_typed_params(ssm_dict):
+    params = {
+        randomword(): {
+            "Value": randomword(),
+            "Type": "String",
+            "Description": "aws-ssm-backup testing String parameter",
+        },
+        randomword(): {
+            "Value": randomword(),
+            "Type": "SecureString",
+            "Description": "aws-ssm-backup testing String parameter",
+        },
+        randomword(): {
+            "Value": randomlist(),
+            "Type": "StringList",
+            "Description": "aws-ssm-backup testing String parameter",
+        },
     }
     ssm_dict.upload_dictionary(params)
     return params
@@ -32,6 +52,16 @@ def setup_ssm_parameters(context):
     """parameters that will be deleted during the simulated disaster"""
     ssm_dict = context.ssm_dict = aws_ssm_dict()
     context.test_params = params = create_random_params(ssm_dict)
+    yield (True)
+    aws_ssm_dict.remove_dictionary(ssm_dict, params)
+    aws_ssm_dict.verify_deleted_dictionary(ssm_dict, params)
+
+
+@fixture
+def setup_typed_ssm_parameters(context):
+    """parameters that will be deleted during the simulated disaster"""
+    ssm_dict = context.ssm_dict = aws_ssm_dict()
+    context.test_params = params = create_random_typed_params(ssm_dict)
     yield (True)
     aws_ssm_dict.remove_dictionary(ssm_dict, params)
     aws_ssm_dict.verify_deleted_dictionary(ssm_dict, params)
@@ -53,6 +83,7 @@ def preexisting_ssm_parameters(context):
 # -- REGISTRY DATA SCHEMA 1: fixture_func
 fixture_registry1 = {
     "fixture.ssm_params": setup_ssm_parameters,
+    "fixture.ssm_typed_params": setup_typed_ssm_parameters,
     "fixture.preexist_params": preexisting_ssm_parameters,
 }
 
