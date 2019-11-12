@@ -2,6 +2,7 @@ import boto3
 from hamcrest import assert_that, equal_to
 from typing import Dict, Tuple, Union
 from collections.abc import MutableMapping
+from botocore.exceptions import ParamValidationError
 
 
 class aws_ssm_dict(MutableMapping):
@@ -30,7 +31,14 @@ class aws_ssm_dict(MutableMapping):
         """
 
         description = None
-        if isinstance(value, tuple):
+        if isinstance(value, dict):
+            param_type = value["type"]
+            val_string = value["value"]
+            try:
+                description = value["description"]
+            except KeyError:
+                pass
+        elif isinstance(value, tuple):
             param_type = value[0]
             val_string = value[1]
             try:
@@ -42,31 +50,27 @@ class aws_ssm_dict(MutableMapping):
             val_string = value
 
         request_params = dict(Name=key, Type=param_type, Value=val_string)
-        if description:
+        if description is not None:
             request_params.update(dict(Description=description))
-
-        self.ssm.put_parameter(**request_params)
+        try:
+            self.ssm.put_parameter(**request_params)
+        except (
+            self.ssm.exceptions.ParameterNotFound,
+            ParamValidationError,  # import from botocore.exceptions since ssm doesn't (currently?) export this
+            self.ssm.exceptions.ParameterAlreadyExists,
+        ) as e:
+            raise AttributeError(e)
+        except self.ssm.exceptions.ClientError as e:
+            if "ValidationException" not in str(e):
+                raise e
+            raise AttributeError(e)
 
     def __delitem__(self, key):
         request_params = dict(Name=key)
-        self.ssm.delete_parameter(**request_params)
-
-    def get_tuple_for_param(self, name):
         try:
-            get_response = self.ssm.get_parameter(
-                Name=name, WithDecryption=self.decrypt
-            )
+            self.ssm.delete_parameter(**request_params)
         except self.ssm.exceptions.ParameterNotFound as e:
             raise KeyError(e)
-        try:
-            describe_response = self.ssm.describe_parameter(Name=name)
-        except self.ssm.exceptions.ParameterNotFound as e:
-            raise KeyError(e)
-        return (
-            get_response["Parameter"]["Type"],
-            get_response["Parameter"]["Value"],
-            describe_response["Parameter"]["Description"],
-        )
 
     def iterate_parameter_list(self):
         paginator = self.ssm.get_paginator("get_parameters_by_path")
@@ -87,7 +91,7 @@ class aws_ssm_dict(MutableMapping):
     def iterate_for_tuples(self):
         for i in self.iterate_parameter_descriptions():
             name = i["Name"]
-            yield (name, self.get_tuple_for_param(name))
+            yield (name, self.get_param_as_tuple(name))
 
     def iterate_for_values(self):
         for i in self.iterate_parameter_list():
@@ -99,23 +103,64 @@ class aws_ssm_dict(MutableMapping):
     def __len__(self):
         pass
 
-    def _return_as_tuple(self, key: str):
-        raise
-        pass
-
-    def _return_as_value(self, key: str):
+    def get_param(self, key: str):
         try:
             response = self.ssm.get_parameter(Name=key, WithDecryption=self.decrypt)
         except self.ssm.exceptions.ParameterNotFound as e:
             raise KeyError(e)
         assert response["Parameter"]["Name"] == key
+        return response
+
+    def get_param_as_dict(self, key: str):
+        try:
+            get_response = self.ssm.get_parameter(Name=key, WithDecryption=self.decrypt)
+        except self.ssm.exceptions.ParameterNotFound as e:
+            raise KeyError(e)
+        try:
+            describe_response = self.ssm.describe_parameters(
+                Filters=[{"Key": "Name", "Values": [key]}]
+            )
+        except self.ssm.exceptions.ParameterNotFound as e:
+            raise KeyError(e)
+        retval = {
+            "value": get_response["Parameter"]["Value"],
+            "type": get_response["Parameter"]["Type"],
+        }
+        try:
+            retval["description"] = describe_response["Parameters"][0]["Description"]
+        except KeyError:
+            pass
+        return retval
+
+    def get_param_as_tuple(self, key: str):
+        try:
+            get_response = self.ssm.get_parameter(Name=key, WithDecryption=self.decrypt)
+        except self.ssm.exceptions.ParameterNotFound as e:
+            raise KeyError(e)
+        try:
+            describe_response = self.ssm.describe_parameters(
+                Filters=[{"Key": "Name", "Values": [key]}]
+            )
+        except self.ssm.exceptions.ParameterNotFound as e:
+            raise KeyError(e)
+        return (
+            get_response["Parameter"]["Type"],
+            get_response["Parameter"]["Value"],
+            describe_response["Parameters"][0]["Description"],
+        )
+
+    def get_param_as_value(self, key: str):
+        response = self.get_param(key)
         return response["Parameter"]["Value"]
 
     def __getitem__(self, key: str):
-        if self.return_type == "tuple":
-            return self._return_as_tuple(key)
-        else:
-            return self._return_as_value(key)
+        if self.return_type == "dict":
+            return self.get_param_as_dict(key)
+        elif self.return_type == "tuple":
+            return self.get_param_as_tuple(key)
+        elif self.return_type == "value":
+            return self.get_param_as_value(key)
+        raise Exception("unknown return type:" + self.return_type)
 
     def upload_dictionary(self, my_dict: Dict[str, str]):
         for i in my_dict.keys():
@@ -128,8 +173,16 @@ class aws_ssm_dict(MutableMapping):
 
     def verify_dictionary(self, my_dict: Dict[str, str]):
         for i in my_dict.keys():
-            value = self[i]
-            assert_that(value, equal_to(my_dict[i]))
+            test_value = my_dict[i]
+            if isinstance(test_value, dict):
+                ssm_param = self.get_param_as_dict(i)
+                assert_that(ssm_param["type"], equal_to(test_value["type"]))
+                assert_that(ssm_param["value"], equal_to(test_value["value"]))
+                assert_that(
+                    ssm_param["description"], equal_to(test_value["description"])
+                )
+            if isinstance(test_value, str):
+                assert_that(self.get_param_as_value(i), equal_to(test_value))
 
     def verify_deleted_dictionary(self, my_dict: Dict[str, str]):
         except_count = 0

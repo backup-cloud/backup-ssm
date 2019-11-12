@@ -11,7 +11,7 @@ def eprint(*args, **kwargs):
 
 
 def backup_to_file(file):
-    ssm_dict = aws_ssm_dict()
+    ssm_dict = aws_ssm_dict(return_type="dict")
     contents = {}
     for i in ssm_dict.keys():
         try:
@@ -36,5 +36,8 @@ def restore_from_file(file):
     for i in contents.keys():
         try:
             ssm_dict[i] = contents[i]
-        except ssm_dict.exceptions.ParameterAlreadyExists:
-            logger.warning("Parameter " + i + " already exists!")
+        except AttributeError as e:
+            if "ParameterAlreadyExists" in str(e):
+                logger.warning("Parameter " + i + " already exists!")
+            else:
+                raise

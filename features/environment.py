@@ -28,19 +28,19 @@ def create_random_params(ssm_dict):
 def create_random_typed_params(ssm_dict):
     params = {
         randomword(): {
-            "Value": randomword(),
-            "Type": "String",
-            "Description": "aws-ssm-backup testing String parameter",
+            "value": randomword(),
+            "type": "String",
+            "description": "aws-ssm-backup testing String parameter",
         },
         randomword(): {
-            "Value": randomword(),
-            "Type": "SecureString",
-            "Description": "aws-ssm-backup testing String parameter",
+            "value": randomword(),
+            "type": "SecureString",
+            "description": "aws-ssm-backup testing String parameter",
         },
         randomword(): {
-            "Value": randomlist(),
-            "Type": "StringList",
-            "Description": "aws-ssm-backup testing String parameter",
+            "value": randomlist(),
+            "type": "StringList",
+            "description": "aws-ssm-backup testing String parameter",
         },
     }
     ssm_dict.upload_dictionary(params)
