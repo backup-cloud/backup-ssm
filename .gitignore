@@ -32,3 +32,4 @@ encrypted_build_files
 encrypted_build_files.tjz
 *.egg-info
 *.makestamp
+.hypothesis

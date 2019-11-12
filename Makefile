@@ -6,8 +6,16 @@ KEYFILE ?=.anslk_random_testkey
 
 LIBFILES := $(shell find backup_cloud_ssm -name '*.py')
 
-test: develop
+all: lint test
+
+test: develop pytest behave
+
+behave:
 	behave --tags ~@future
+
+pytest:
+	pytest
+
 
 wip: develop
 	behave --wip
@@ -25,3 +33,5 @@ develop: .develop.makestamp
 	$(PYTHON) setup.py install --force
 	$(PYTHON) setup.py develop
 	touch $@
+
+.PHONY: all test behave pytest wip lint develop
