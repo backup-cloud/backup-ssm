@@ -182,7 +182,8 @@ class aws_ssm_dict(MutableMapping):
             )
             param_pages = [page["Parameters"] for page in page_iterator]
             paramlist = [param for sublist in param_pages for param in sublist]
-            if len(paramlist) == 0:
+            ret_paramlist = [x for x in paramlist if x["Name"] == key]
+            if len(ret_paramlist) == 0:
                 if count > max_retries:
                     raise KeyError("description retry count exceeded - aborting")
                 count += 1
@@ -195,9 +196,9 @@ class aws_ssm_dict(MutableMapping):
                 sleep_secs = sleep_secs * sleep_mult
             else:
                 break
-        assert len(paramlist) == 1
-        assert paramlist[0]["Name"] == key
-        return paramlist[0]
+        assert len(ret_paramlist) == 1, "Paramlist wrong length: " + str(ret_paramlist)
+        assert ret_paramlist[0]["Name"] == key
+        return ret_paramlist[0]
 
     def retrieve_description(self, key: str):
         parameter_describe = self.desc_param(key)

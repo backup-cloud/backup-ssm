@@ -40,22 +40,60 @@ def store_restore_key(ssm_dict, key, value):
     except KeyError:
         pass
 
-    ssm_dict[fixed_key] = value
-    return ssm_dict[fixed_key]
+    ssm_dict[key] = value
+    return ssm_dict[key]
 
 
 def store_key_with_types(ssm_dict, key, value, type_name, description):
     assert ssm_dict.return_type == "dict"
     try:
-        del ssm_dict[fixed_key]
+        del ssm_dict[key]
     except KeyError:
         pass
 
-    ssm_dict[fixed_key] = {
-        "value": value,
-        "type": type_name,
-        "description": description,
-    }
+    ssm_dict[key] = {"value": value, "type": type_name, "description": description}
+
+
+@pytest.mark.wip
+def test_store_restore_keys_with_common_start():
+    key = "/test/fake/key_part"
+    value = "that"
+    key2 = key + "_too"
+    type_name = "String"
+    description = "two matching strings test parameter"
+    ssm_dict = aws_ssm_dict(return_type="dict")
+    try:
+        ssm_dict[key2] = "this"
+    except AttributeError as e:
+        if "ParameterAlreadyExists" not in str(e):
+            raise
+
+    store_key_with_types(ssm_dict, key, value, type_name, description)
+
+    max_retries = 10
+    count = 0
+    sleep_secs = 300 / 1000
+    sleep_mult = 1.4
+    while True:
+        if count > max_retries:
+            raise Exception(
+                "Too many retries: description mismatch - probably update is broken"
+            )
+        returned_param = ssm_dict[key]
+        if returned_param["description"] != description:
+            warn("description mismatch - sleep and try again")
+            sleep(sleep_secs)
+            count += 1
+            sleep_secs = sleep_secs * sleep_mult
+        else:
+            break
+
+    assert isinstance(returned_param, dict)
+    assert (
+        returned_param["value"] == value
+        and returned_param["type"] == type_name
+        and returned_param["description"] == description
+    ), "return parameter mismatch"
 
 
 @sometimes_mock_ssm
@@ -73,7 +111,6 @@ type_names = ("SecureString", "String", "StringList")
 # function so we leave it in and keep increasing the time and retrys
 
 
-@pytest.mark.wip
 @sometimes_mock_ssm
 @settings(deadline=100000)
 @given(
@@ -86,6 +123,7 @@ type_names = ("SecureString", "String", "StringList")
 def test_store_returns_input_with_type(value, type_name, description):
     ssm_dict = aws_ssm_dict(return_type="dict")
     store_key_with_types(ssm_dict, fixed_key, value, type_name, description)
+
     max_retries = 10
     count = 0
     sleep_secs = 300 / 1000
