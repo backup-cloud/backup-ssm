@@ -8,18 +8,22 @@ LIBFILES := $(shell find backup_cloud_ssm -name '*.py')
 
 all: lint test
 
-test: develop pytest behave
+# pytest-mocked is much faster than non-mocked which is slower even than
+# the functional tests so run it first, then behave then ffinally the
+# full pytest tests so that failures are detected early where possible.
+test: develop pytest-mocked behave pytest 
 
 behave:
 	behave --tags ~@future
 
+pytest-mocked:
+	MOCK_AWS=true pytest
+
 pytest:
 	pytest
 
-
 wip: develop
 	behave --wip
-
 
 lint:
 	pre-commit install --install-hooks
@@ -34,4 +38,4 @@ develop: .develop.makestamp
 	$(PYTHON) setup.py develop
 	touch $@
 
-.PHONY: all test behave pytest wip lint develop
+.PHONY: all test behave pytest-mocked pytest wip lint develop

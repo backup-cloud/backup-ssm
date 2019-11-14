@@ -10,11 +10,11 @@ set of SSM parameters.
 
 2) to backup run
 
-   aws-ssm-backup > <filename>
+   aws-ssm-backup > `<filename>`
 
 3) to restore run
 
-   aws-ssm-backup --restore > <filename>
+   aws-ssm-backup --restore > `<filename>`
 
 Special notes:
 
@@ -65,10 +65,6 @@ for how to handle this.
 ## Development
 
 We aim to use Behavior Driven Development to encourage reasonable feature descriptions and a level of tests appropriate for the business functionality included here.  Test Driven Development and to some extent Test Driven Design are encouraged in order to improve testability and eas of modification of the code.
-
-Some of the tests are designed to run against either the Moto library or a real AWS instance.  By defining the variable:
-
-    We aim to use Behavior Driven Development to encourage reasonable feature descriptions and a level of tests appropriate for the business functionality included here.  Test Driven Development and to some extent Test Driven Design are encouraged in order to improve testability and eas of modification of the code.
 
 Some of the tests are designed to run against either the Moto library or a real AWS instance.  By defining the shell variable MOCK_AWS as "true" all of the tests which can be run in mocked form will be.  
 

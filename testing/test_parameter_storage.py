@@ -54,6 +54,7 @@ def store_key_with_types(ssm_dict, key, value, type_name, description):
     ssm_dict[key] = {"value": value, "type": type_name, "description": description}
 
 
+@sometimes_mock_ssm
 @pytest.mark.wip
 def test_store_restore_keys_with_common_start():
     key = "/test/fake/key_part"
@@ -150,6 +151,7 @@ def test_store_returns_input_with_type(value, type_name, description):
     ), "return parameter mismatch"
 
 
+@sometimes_mock_ssm
 def test_empty_string_is_stored_as_none_and_returned_as_empty():
     value = "empty desc demo"
     type_name = "SecureString"
