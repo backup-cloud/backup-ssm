@@ -120,7 +120,7 @@ class aws_ssm_dict(MutableMapping):
             for i in page["Parameters"]:
                 yield i
 
-    def iterate_parameter_descriptions(self):
+    def iterate_param_descs_for_names(self):
         paginator = self.ssm.get_paginator("describe_parameters")
         page_iterator = paginator.paginate()
         for page in page_iterator:
@@ -128,7 +128,7 @@ class aws_ssm_dict(MutableMapping):
                 yield i["Name"]
 
     def iterate_for_tuples(self):
-        for i in self.iterate_parameter_descriptions():
+        for i in self.iterate_param_descs_for_names():
             name = i["Name"]
             yield (name, self.get_param_as_tuple(name))
 
@@ -137,7 +137,7 @@ class aws_ssm_dict(MutableMapping):
             yield (i["Name"], i["Value"])
 
     def __iter__(self):
-        yield from self.iterate_parameter_descriptions()
+        yield from self.iterate_param_descs_for_names()
 
     def __len__(self):
         pass
@@ -151,65 +151,76 @@ class aws_ssm_dict(MutableMapping):
         return response
 
     def desc_param(self, key: str, max_retries=15):
-        """get the description of a parameter
+        """get the description of a parameter we _know_ is there
 
-        this tries to get the describe_parameters response for a
-        parameter with the parameter as the first (and only) parameter
-        in the parameter list.  In the case that the initial call
-        fails it retries (max_retries times) in case a parameter has
-        been created but the data about it is not yet in sync.
+        this tries to get the AWS parameter description from inside a
+        describe_parameters response for a parameter with the
+        parameter as the first (and only) parameter in the parameter
+        list.  In the case that the initial call fails it retries
+        (max_retries times) in case a parameter has been created but
+        the data about it is not yet in sync.
+
+        """
+
+        """Note on code here:
+
+        "Request results are returned on a best-effort basis."
+        https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DescribeParameters.html
+
+        this means that even though we only want the first result, we
+        still have to paginate through what may be a number of
+        responses with empty parameter lists.
         """
 
         count = 0
         sleep_secs = 100 / 1000
         sleep_mult = 1.2
         while True:
-            try:
-
-                describe_response = self.ssm.describe_parameters(
-                    Filters=[{"Key": "Name", "Values": [key]}]
-                )
-                logging.debug(
-                    "Desc param - parameters returned: "
-                    + str(describe_response["Parameters"])
-                )
-                if describe_response["Parameters"][0]["Name"] == key:
-                    break
-            except (self.ssm.exceptions.ParameterNotFound, IndexError) as e:
-                if count == max_retries:
-                    raise KeyError("description retry count exceeded", e)
-            count += 1
-
-            logging.debug(
-                "sleeping "
-                + str(sleep_secs)
-                + " to give ssm time to retrieve description"
+            paginator = self.ssm.get_paginator("describe_parameters")
+            page_iterator = paginator.paginate(
+                Filters=[{"Key": "Name", "Values": [key]}]
             )
-            sleep(sleep_secs)
-            sleep_secs = sleep_secs * sleep_mult
+            param_pages = [page["Parameters"] for page in page_iterator]
+            paramlist = [param for sublist in param_pages for param in sublist]
+            if len(paramlist) == 0:
+                if count > max_retries:
+                    raise KeyError("description retry count exceeded - aborting")
+                count += 1
+                logging.debug(
+                    "sleeping "
+                    + str(sleep_secs)
+                    + " to give ssm time to retrieve description"
+                )
+                sleep(sleep_secs)
+                sleep_secs = sleep_secs * sleep_mult
+            else:
+                break
+        assert len(paramlist) == 1
+        assert paramlist[0]["Name"] == key
+        return paramlist[0]
 
-        return describe_response
+    def retrieve_description(self, key: str):
+        parameter_describe = self.desc_param(key)
+        try:
+            description = parameter_describe["Description"]
+        except KeyError:
+            description = ""
+        return description
 
     def get_param_as_dict(self, key: str):
         get_response = self.get_param(key)
+        description = self.retrieve_description(key)
+
         retval = {
             "value": get_response["Parameter"]["Value"],
             "type": get_response["Parameter"]["Type"],
+            "description": description,
         }
-        describe_response = self.desc_param(key)
-        try:
-            retval["description"] = describe_response["Parameters"][0]["Description"]
-        except KeyError:
-            retval["description"] = ""
         return retval
 
     def get_param_as_tuple(self, key: str):
         get_response = self.ssm.get_parameter(Name=key, WithDecryption=self.decrypt)
-        describe_response = self.desc_param(key)
-        try:
-            description = describe_response["Parameters"][0]["Description"]
-        except KeyError:
-            description = ""
+        description = self.retrieve_description(key)
         return (
             get_response["Parameter"]["Type"],
             get_response["Parameter"]["Value"],
