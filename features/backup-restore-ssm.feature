@@ -10,7 +10,6 @@ In order to ensure that I can recover my SSM parameters even
    And I restore those parameters
    Then those parameters should be in SSM parameter store
 
-   @wip
    @fixture.preexist_params
    @fixture.ssm_typed_params
    Scenario: backup SSM to a plaintext file

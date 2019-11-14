@@ -1,5 +1,5 @@
 fixed_key = "/backup_cloud_aws_ssm_test/test_key"
-from hypothesis import given, settings
+from hypothesis import given, settings, example
 import hypothesis.strategies as strategies
 from backup_cloud_ssm.aws_ssm_dict import aws_ssm_dict
 from moto import mock_ssm
@@ -20,6 +20,7 @@ badkey_examples = ("", "/", None)
 
 
 # this cannot be mocked via moto because moto accepts these keys!
+@settings(deadline=3000)
 @given(strategies.sampled_from(badkey_examples))
 def test_bad_key_raises_exception(key):
     ssm_dict = aws_ssm_dict()
@@ -31,21 +32,23 @@ def test_bad_key_raises_exception(key):
     assert exception_thrown, "key: " + key + " failed to throw expected assertion"
 
 
-def store_restore_key(ssm_dict, value):
+def store_restore_key(ssm_dict, key, value):
     try:
-        del ssm_dict[fixed_key]
+        del ssm_dict[key]
     except KeyError:
         pass
+
     ssm_dict[fixed_key] = value
     return ssm_dict[fixed_key]
 
 
-def store_restore_key_with_types(ssm_dict, value, type_name, description):
+def store_restore_key_with_types(ssm_dict, key, value, type_name, description):
     assert ssm_dict.return_type == "dict"
     try:
         del ssm_dict[fixed_key]
     except KeyError:
         pass
+
     ssm_dict[fixed_key] = {
         "value": value,
         "type": type_name,
@@ -59,13 +62,12 @@ def store_restore_key_with_types(ssm_dict, value, type_name, description):
 @given(strategies.text(min_size=1, max_size=400))
 def test_store_returns_input(value):
     ssm_dict = aws_ssm_dict()
-    assert store_restore_key(ssm_dict, value) == value
+    assert store_restore_key(ssm_dict, fixed_key, value) == value
 
 
 type_names = ("SecureString", "String", "StringList")
 
 
-@pytest.mark.wip
 @sometimes_mock_ssm
 @settings(deadline=3000)
 @given(
@@ -73,16 +75,40 @@ type_names = ("SecureString", "String", "StringList")
     strategies.sampled_from(type_names),
     strategies.text(min_size=0, max_size=400),
 )
+@example(value="0", type_name="SecureString", description="0")
+@example(value="0", type_name="SecureString", description="")
 def test_store_returns_input_with_type(value, type_name, description):
     ssm_dict = aws_ssm_dict(return_type="dict")
     returned_param = store_restore_key_with_types(
-        ssm_dict, value, type_name, description
+        ssm_dict, fixed_key, value, type_name, description
     )
     assert isinstance(returned_param, dict)
     assert (
-        value == returned_param["value"]
-        and type_name == returned_param["type"]
-        and description == returned_param.get("description", "")
+        returned_param["value"] == value
+        and returned_param["type"] == type_name
+        and returned_param["description"] == description
+    ), "return parameter mismatch"
+
+
+@pytest.mark.wip
+def test_empty_string_is_stored_as_none_and_returned_as_empty():
+    value = "empty desc demo"
+    type_name = "SecureString"
+    description = ""
+    ssm_dict = aws_ssm_dict(return_type="dict")
+    try:
+        del ssm_dict[fixed_key]
+    except KeyError:
+        pass
+
+    ssm_dict[fixed_key] = (type_name, value, "")
+
+    returned_param = ssm_dict[fixed_key]
+    assert isinstance(returned_param, dict)
+    assert (
+        returned_param["value"] == value
+        and returned_param["type"] == type_name
+        and returned_param["description"] == description
     ), "return parameter mismatch"
 
 

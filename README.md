@@ -35,6 +35,17 @@ which accesses SSM parameter store.  This will likely, later, be split out into 
       print(ssm_dict["parameter"])
       
 
+SSM parameter store treats storing no description and storing the
+empty description ("") as the same thing and will not return any
+description.  For simplicity we have now chosen to represent this as
+the empty string.  This decision may change in future and feedback is
+appreciated.
+
+When parameters are deleted the parameter description sometimes seems
+to persist for some time, possibly only when it was '0'.  Do not rely
+on the deescription to be empty or ee testing/test_parameter_storage
+for how to handle this.
+
 ## Development
 
 We aim to use Behavior Driven Development to encourage reasonable feature descriptions and a level of tests appropriate for the business functionality included here.  Test Driven Development and to some extent Test Driven Design are encouraged in order to improve testability and eas of modification of the code.

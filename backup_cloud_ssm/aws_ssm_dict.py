@@ -3,6 +3,8 @@ from hamcrest import assert_that, equal_to
 from typing import Dict, Tuple, Union
 from collections.abc import MutableMapping
 from botocore.exceptions import ParamValidationError
+from time import sleep
+import logging
 
 
 class aws_ssm_dict(MutableMapping):
@@ -17,8 +19,16 @@ class aws_ssm_dict(MutableMapping):
 
     """
 
-    def __init__(self, decrypt=True, return_type="value", region_name="eu-west-1"):
-        self.ssm = boto3.client("ssm", region_name=region_name)
+    def __init__(
+        self, decrypt=True, return_type="value", region_name=None, ssm_client=None
+    ):
+        if ssm_client is None:
+            if region_name is not None:
+                self.ssm = boto3.client("ssm", region_name=region_name)
+            else:
+                self.ssm = boto3.client("ssm", region_name=region_name)
+        else:
+            self.ssm = ssm_client
         self.exceptions = self.ssm.exceptions
         self.decrypt = decrypt
         self.return_type = return_type
@@ -37,14 +47,14 @@ class aws_ssm_dict(MutableMapping):
             try:
                 description = value["description"]
             except KeyError:
-                pass
+                description = None
         elif isinstance(value, tuple):
             param_type = value[0]
             val_string = value[1]
             try:
                 description = value[2]
             except IndexError:
-                pass
+                description = None
         else:
             param_type = "SecureString"
             val_string = value
@@ -65,12 +75,41 @@ class aws_ssm_dict(MutableMapping):
                 raise e
             raise AttributeError(e)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key, max_retries=15):
+        """delete a parameter and wait for it to be deleted
+
+        We send the delete_parameter call to AWS which requests
+        parameter deletion.  Unfortunately it seems that this takes
+        some time after the call returns to complete.  This means we
+        means we wait to retry by default.
+        """
+
         request_params = dict(Name=key)
         try:
             self.ssm.delete_parameter(**request_params)
         except self.ssm.exceptions.ParameterNotFound as e:
             raise KeyError(e)
+        count = 0
+        sleep_secs = 100 / 1000
+        sleep_mult = 1.2
+        while True:
+            describe_response = self.ssm.describe_parameters(
+                Filters=[{"Key": "Name", "Values": [key]}]
+            )
+            try:
+                if "Description" not in describe_response["Parameters"][0]:
+                    break
+            except IndexError:
+                break
+            if count < max_retries:
+                logging.debug("sleeping " + str(sleep_secs) + " to give ssm time")
+                sleep(sleep_secs)
+                count += 1
+                sleep_secs = sleep_secs * sleep_mult
+            else:
+                raise Exception(
+                    "Description failed to clear after delete - nasty AWS!!!"
+                )
 
     def iterate_parameter_list(self):
         paginator = self.ssm.get_paginator("get_parameters_by_path")
@@ -111,42 +150,70 @@ class aws_ssm_dict(MutableMapping):
         assert response["Parameter"]["Name"] == key
         return response
 
-    def get_param_as_dict(self, key: str):
-        try:
-            get_response = self.ssm.get_parameter(Name=key, WithDecryption=self.decrypt)
-        except self.ssm.exceptions.ParameterNotFound as e:
-            raise KeyError(e)
-        try:
-            describe_response = self.ssm.describe_parameters(
-                Filters=[{"Key": "Name", "Values": [key]}]
+    def desc_param(self, key: str, max_retries=15):
+        """get the description of a parameter
+
+        this tries to get the describe_parameters response for a
+        parameter with the parameter as the first (and only) parameter
+        in the parameter list.  In the case that the initial call
+        fails it retries (max_retries times) in case a parameter has
+        been created but the data about it is not yet in sync.
+        """
+
+        count = 0
+        sleep_secs = 100 / 1000
+        sleep_mult = 1.2
+        while True:
+            try:
+
+                describe_response = self.ssm.describe_parameters(
+                    Filters=[{"Key": "Name", "Values": [key]}]
+                )
+                logging.debug(
+                    "Desc param - parameters returned: "
+                    + str(describe_response["Parameters"])
+                )
+                if describe_response["Parameters"][0]["Name"] == key:
+                    break
+            except (self.ssm.exceptions.ParameterNotFound, IndexError) as e:
+                if count == max_retries:
+                    raise KeyError("description retry count exceeded", e)
+            count += 1
+
+            logging.debug(
+                "sleeping "
+                + str(sleep_secs)
+                + " to give ssm time to retrieve description"
             )
-        except self.ssm.exceptions.ParameterNotFound as e:
-            raise KeyError(e)
+            sleep(sleep_secs)
+            sleep_secs = sleep_secs * sleep_mult
+
+        return describe_response
+
+    def get_param_as_dict(self, key: str):
+        get_response = self.get_param(key)
         retval = {
             "value": get_response["Parameter"]["Value"],
             "type": get_response["Parameter"]["Type"],
         }
+        describe_response = self.desc_param(key)
         try:
             retval["description"] = describe_response["Parameters"][0]["Description"]
         except KeyError:
-            pass
+            retval["description"] = ""
         return retval
 
     def get_param_as_tuple(self, key: str):
+        get_response = self.ssm.get_parameter(Name=key, WithDecryption=self.decrypt)
+        describe_response = self.desc_param(key)
         try:
-            get_response = self.ssm.get_parameter(Name=key, WithDecryption=self.decrypt)
-        except self.ssm.exceptions.ParameterNotFound as e:
-            raise KeyError(e)
-        try:
-            describe_response = self.ssm.describe_parameters(
-                Filters=[{"Key": "Name", "Values": [key]}]
-            )
-        except self.ssm.exceptions.ParameterNotFound as e:
-            raise KeyError(e)
+            description = describe_response["Parameters"][0]["Description"]
+        except KeyError:
+            description = ""
         return (
             get_response["Parameter"]["Type"],
             get_response["Parameter"]["Value"],
-            describe_response["Parameters"][0]["Description"],
+            description,
         )
 
     def get_param_as_value(self, key: str):
@@ -160,7 +227,7 @@ class aws_ssm_dict(MutableMapping):
             return self.get_param_as_tuple(key)
         elif self.return_type == "value":
             return self.get_param_as_value(key)
-        raise Exception("unknown return type:" + self.return_type)
+        raise Exception("unknown return type: " + self.return_type)
 
     def upload_dictionary(self, my_dict: Dict[str, str]):
         for i in my_dict.keys():
