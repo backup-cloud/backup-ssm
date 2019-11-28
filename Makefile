@@ -28,6 +28,8 @@ lint:
 	pre-commit install --install-hooks
 	pre-commit run -a
 
+clean:
+	python setup.py clean --all
 
 # develop is needed to install scripts that are called during testing 
 develop: .develop.makestamp
