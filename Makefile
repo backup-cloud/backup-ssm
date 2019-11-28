@@ -2,14 +2,13 @@ AWS_ACCOUNT_NAME ?= michael
 AWS_DEFAULT_REGION ?= eu-west-1
 PYTHON ?= python3
 BEHAVE ?= behave
-KEYFILE ?=.anslk_random_testkey
 
 LIBFILES := $(shell find backup_cloud_ssm -name '*.py')
 
 all: lint test
 
 # pytest-mocked is much faster than non-mocked which is slower even than
-# the functional tests so run it first, then behave then ffinally the
+# the functional tests so run it first, then behave then finally the
 # full pytest tests so that failures are detected early where possible.
 test: develop pytest-mocked behave pytest 
 
@@ -23,7 +22,7 @@ pytest:
 	pytest
 
 wip: develop
-	behave --wip
+	$(BEHAVE) --wip
 
 lint:
 	pre-commit install --install-hooks

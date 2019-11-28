@@ -23,10 +23,7 @@ class aws_ssm_dict(MutableMapping):
         self, decrypt=True, return_type="value", region_name=None, ssm_client=None
     ):
         if ssm_client is None:
-            if region_name is not None:
-                self.ssm = boto3.client("ssm", region_name=region_name)
-            else:
-                self.ssm = boto3.client("ssm", region_name=region_name)
+            self.ssm = boto3.client("ssm", region_name=region_name)
         else:
             self.ssm = ssm_client
         self.exceptions = self.ssm.exceptions

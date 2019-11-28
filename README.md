@@ -8,6 +8,10 @@ set of SSM parameters.
 
 1) set up the appropriate environment including AWS variables
 
+    export AWS_REGION=us-west-2
+    export AWS_ACCESS_KEY_ID=AKIABCDEFGHIJKLMNOPQ
+    export AWS_SECRET_ACCESS_KEY=1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZABCD
+
 2) to backup run
 
    aws-ssm-backup > `<filename>`
