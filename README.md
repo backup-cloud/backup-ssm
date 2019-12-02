@@ -14,11 +14,11 @@ set of SSM parameters.
 
 2) to backup run
 
-   aws-ssm-backup > `<filename>`
+    aws-ssm-backup > `<filename>`
 
 3) to restore run
 
-   aws-ssm-backup --restore > `<filename>`
+    aws-ssm-backup --restore > `<filename>`
 
 Special notes:
 

@@ -3,7 +3,18 @@ AWS_DEFAULT_REGION ?= eu-west-1
 PYTHON ?= python3
 BEHAVE ?= behave
 
+export AWS_DEFAULT_REGION
+
 LIBFILES := $(shell find backup_cloud_ssm -name '*.py')
+
+# we want to automate all the setup but we don't want to do it by surprise so we default
+# to aborting with a message to correct things
+abort:
+	@echo "***************************************************************************"
+	@echo "* please run 'make all' to install library and programs locally then test *"
+	@echo "***************************************************************************"
+	@echo
+	exit 2
 
 all: lint test
 
