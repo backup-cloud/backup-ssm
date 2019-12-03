@@ -12,7 +12,6 @@ backup_cloud to ensure that backups are encrypted and protected but can be recov
           and I have configured my settings in SSM
 
 
-  @future
   @wip
   Scenario: default encryption when ssm is backed up to S3
       Given I have some parameters in SSM parameter store

@@ -29,6 +29,15 @@ parameter, simply manually delete it and run again.
 SSM shortly before doing a backup.  You may want to wait a second or
 so after restoring.
 
+Special notes:
+
+1) the tool does not overwrite - if you want to replace an existing
+parameter, simply manually delete it and run again.
+
+2) ssm seems to be eventually consistent - you will not want to update
+SSM shortly before doing a backup.  You may want to wait a second or
+so after restoring.
+
 ## Using python interface
 
 The backup and restore functions are provided as a libray.  For backup

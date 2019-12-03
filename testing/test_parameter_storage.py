@@ -112,6 +112,7 @@ type_names = ("SecureString", "String", "StringList")
 # function so we leave it in and keep increasing the time and retrys
 
 
+@pytest.mark.wip
 @sometimes_mock_ssm
 @settings(deadline=100000)
 @given(
